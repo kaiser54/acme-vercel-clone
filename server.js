@@ -47,7 +47,7 @@ app.use(session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: {
+    cookie: { 
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
@@ -58,13 +58,13 @@ app.use(express.static('public'));
 // Socket.io connection handling
 io.on('connection', (socket) => {
     console.log('New client connected');
-
+    
     // Associate socket with user
     socket.on('register', (userId) => {
         if (userId) {
             console.log(`User ${userId} registered with socket`);
             userConnections.set(userId, socket);
-
+            
             // Listen for client disconnection to remove from map
             socket.on('disconnect', () => {
                 console.log(`User ${userId} disconnected`);
@@ -80,15 +80,15 @@ function verifyWebhookSignature(req) {
         console.warn('No webhook secret configured, skipping signature verification');
         return true;
     }
-
+    
     const signature = req.headers['x-hub-signature-256'];
     if (!signature) {
         return false;
     }
-
+    
     const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET);
     const computedSignature = 'sha256=' + hmac.update(JSON.stringify(req.body)).digest('hex');
-
+    
     return crypto.timingSafeEqual(
         Buffer.from(signature),
         Buffer.from(computedSignature)
@@ -103,13 +103,13 @@ app.post('/api/webhooks/github', (req, res) => {
             console.error('Invalid webhook signature');
             return res.status(401).send('Invalid signature');
         }
-
+        
         // Get the event type
         const event = req.headers['x-github-event'];
         const payload = req.body;
-
+        
         console.log(`Received GitHub webhook: ${event}`);
-
+        
         // Process different events
         switch (event) {
             case 'push':
@@ -140,7 +140,7 @@ app.post('/api/webhooks/github', (req, res) => {
                 handleInstallationEvent(payload);
                 break;
         }
-
+        
         res.status(200).send('Webhook received');
     } catch (error) {
         console.error('Error processing webhook:', error);
@@ -155,7 +155,7 @@ function handlePushEvent(payload) {
     const branch = payload.ref.replace('refs/heads/', '');
     const pusher = payload.pusher.name;
     const commits = payload.commits;
-
+    
     // Find all users with access to this repo and send updates
     for (const [userId, socket] of userConnections.entries()) {
         socket.emit('repo-update', {
@@ -177,7 +177,7 @@ function handleBranchCreateEvent(payload) {
     const repoFullName = payload.repository.full_name;
     const repoId = payload.repository.id;
     const branch = payload.ref;
-
+    
     for (const [userId, socket] of userConnections.entries()) {
         socket.emit('repo-update', {
             type: 'branch-created',
@@ -196,7 +196,7 @@ function handleBranchDeleteEvent(payload) {
     const repoFullName = payload.repository.full_name;
     const repoId = payload.repository.id;
     const branch = payload.ref;
-
+    
     for (const [userId, socket] of userConnections.entries()) {
         socket.emit('repo-update', {
             type: 'branch-deleted',
@@ -215,7 +215,7 @@ function handleRepositoryEvent(payload) {
     const repoFullName = payload.repository.full_name;
     const repoId = payload.repository.id;
     const action = payload.action; // created, deleted, publicized, privatized
-
+    
     for (const [userId, socket] of userConnections.entries()) {
         socket.emit('repo-update', {
             type: 'repository',
@@ -272,26 +272,26 @@ app.get('/auth/github', (req, res) => {
     // Generate a random state parameter to prevent CSRF attacks
     const state = crypto.randomBytes(16).toString('hex');
     req.session.oauthState = state;
-
+    
     const authUrl = `${GITHUB_AUTH_URL}?${querystring.stringify({
         client_id: CLIENT_ID,
         redirect_uri: REDIRECT_URI,
         state: state,
         scope: 'repo read:user admin:repo_hook'  // Added admin:repo_hook for webhook creation
     })}`;
-
+    
     res.redirect(authUrl);
 });
 
 // GitHub OAuth callback route
 app.get('/auth/github/callback', async (req, res) => {
     const { code, state } = req.query;
-
+    
     // Verify state parameter to prevent CSRF attacks
     if (!state || state !== req.session.oauthState) {
         return res.status(400).send('Invalid state parameter. Possible CSRF attack.');
     }
-
+    
     try {
         // Exchange the authorization code for an access token
         const tokenResponse = await axios.post(GITHUB_TOKEN_URL, {
@@ -304,12 +304,12 @@ app.get('/auth/github/callback', async (req, res) => {
                 'Accept': 'application/json'
             }
         });
-
+        
         const accessToken = tokenResponse.data.access_token;
-
+        
         // Store the token in the session
         req.session.accessToken = accessToken;
-
+        
         // Get user data and store in session
         const userResponse = await axios.get(`${GITHUB_API}/user`, {
             headers: {
@@ -317,14 +317,14 @@ app.get('/auth/github/callback', async (req, res) => {
                 'Accept': 'application/vnd.github.v3+json'
             }
         });
-
+        
         req.session.user = {
             id: userResponse.data.id,
             login: userResponse.data.login,
             name: userResponse.data.name,
             avatar_url: userResponse.data.avatar_url
         };
-
+        
         // Redirect to the main application
         res.redirect('/');
     } catch (error) {
@@ -356,14 +356,14 @@ app.get('/api/user', (req, res) => {
 app.get('/api/repos', isAuthenticated, async (req, res) => {
     try {
         const accessToken = req.session.accessToken;
-
+        
         const response = await axios.get(`${GITHUB_API}/user/repos?per_page=100&sort=updated`, {
             headers: {
                 'Authorization': `token ${accessToken}`,
                 'Accept': 'application/vnd.github.v3+json'
             }
         });
-
+        
         const repositories = response.data.map(repo => ({
             id: repo.id,
             name: repo.name,
@@ -374,7 +374,7 @@ app.get('/api/repos', isAuthenticated, async (req, res) => {
             updatedAt: repo.updated_at,
             language: repo.language
         }));
-
+        
         res.json(repositories);
     } catch (error) {
         console.error('Error fetching repositories:', error.message);
@@ -388,23 +388,23 @@ app.post('/api/connect-repos', isAuthenticated, async (req, res) => {
         const { repositories } = req.body;
         const userId = req.session.user.id;
         const accessToken = req.session.accessToken;
-
+        
         if (!repositories || !Array.isArray(repositories)) {
             return res.status(400).json({ error: 'Invalid repositories list' });
         }
-
+        
         // Store the connected repositories
         if (!connectedRepos.has(userId)) {
             connectedRepos.set(userId, []);
         }
-
+        
         const results = [];
-
+        
         // Process each repository
         for (const repo of repositories) {
             try {
                 const { owner, name, id } = repo;
-
+                
                 // Skip if already connected
                 if (connectedRepos.get(userId).includes(id)) {
                     results.push({
@@ -416,10 +416,10 @@ app.post('/api/connect-repos', isAuthenticated, async (req, res) => {
                     });
                     continue;
                 }
-
+                
                 // Create webhook for the repository
                 const webhookUrl = `${req.protocol}://${req.get('host')}/api/webhooks/github`;
-
+                
                 // Check if webhook already exists
                 const hooksResponse = await axios.get(`${GITHUB_API}/repos/${owner}/${name}/hooks`, {
                     headers: {
@@ -427,14 +427,14 @@ app.post('/api/connect-repos', isAuthenticated, async (req, res) => {
                         'Accept': 'application/vnd.github.v3+json'
                     }
                 });
-
+                
                 // Look for our webhook
-                const existingHook = hooksResponse.data.find(hook =>
+                const existingHook = hooksResponse.data.find(hook => 
                     hook.config && hook.config.url === webhookUrl
                 );
-
+                
                 let hookId;
-
+                
                 if (existingHook) {
                     hookId = existingHook.id;
                     console.log(`Webhook already exists for ${owner}/${name}`);
@@ -455,14 +455,14 @@ app.post('/api/connect-repos', isAuthenticated, async (req, res) => {
                             'Accept': 'application/vnd.github.v3+json'
                         }
                     });
-
+                    
                     hookId = newHookResponse.data.id;
                     console.log(`Created webhook for ${owner}/${name}`);
                 }
-
+                
                 // Add to connected repositories
                 connectedRepos.get(userId).push(id);
-
+                
                 results.push({
                     id,
                     name,
@@ -482,7 +482,7 @@ app.post('/api/connect-repos', isAuthenticated, async (req, res) => {
                 });
             }
         }
-
+        
         res.json({
             success: true,
             results
@@ -497,7 +497,7 @@ app.post('/api/connect-repos', isAuthenticated, async (req, res) => {
 app.get('/api/connected-repos', isAuthenticated, (req, res) => {
     const userId = req.session.user.id;
     const userRepos = connectedRepos.get(userId) || [];
-
+    
     res.json({
         connected: userRepos
     });
@@ -508,7 +508,7 @@ app.get('/api/repos/:owner/:repo', isAuthenticated, async (req, res) => {
     try {
         const { owner, repo } = req.params;
         const accessToken = req.session.accessToken;
-
+        
         // Get repo details
         const repoResponse = await axios.get(`${GITHUB_API}/repos/${owner}/${repo}`, {
             headers: {
@@ -542,18 +542,18 @@ app.get('/api/repos/:owner/:repo', isAuthenticated, async (req, res) => {
                     'Accept': 'application/vnd.github.v3+json'
                 }
             });
-
+            
             if (packageResponse.data && packageResponse.data.content) {
                 const packageJson = JSON.parse(Buffer.from(packageResponse.data.content, 'base64').toString());
                 const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
-
+                
                 // Detect framework
                 if (dependencies.react) frameworkInfo.framework = 'React';
                 else if (dependencies.vue) frameworkInfo.framework = 'Vue';
                 else if (dependencies.angular) frameworkInfo.framework = 'Angular';
                 else if (dependencies.next) frameworkInfo.framework = 'Next.js';
                 else if (dependencies.nuxt) frameworkInfo.framework = 'Nuxt.js';
-
+                
                 // Detect preset/template
                 if (packageJson.preset) frameworkInfo.preset = packageJson.preset;
                 if (packageJson.template) frameworkInfo.preset = packageJson.template;
@@ -587,7 +587,7 @@ app.get('/api/repos/:owner/:repo', isAuthenticated, async (req, res) => {
                 url: commit.html_url
             }))
         };
-
+        
         res.json(repoDetails);
     } catch (error) {
         console.error('Error fetching repository details:', error.message);
@@ -601,7 +601,7 @@ app.delete('/api/repos/:owner/:repo/webhook', isAuthenticated, async (req, res) 
         const { owner, repo } = req.params;
         const accessToken = req.session.accessToken;
         const userId = req.session.user.id;
-
+        
         // Find the webhook
         const hooksResponse = await axios.get(`${GITHUB_API}/repos/${owner}/${repo}/hooks`, {
             headers: {
@@ -609,12 +609,12 @@ app.delete('/api/repos/:owner/:repo/webhook', isAuthenticated, async (req, res) 
                 'Accept': 'application/vnd.github.v3+json'
             }
         });
-
+        
         const webhookUrl = `${req.protocol}://${req.get('host')}/api/webhooks/github`;
-        const existingHook = hooksResponse.data.find(hook =>
+        const existingHook = hooksResponse.data.find(hook => 
             hook.config && hook.config.url === webhookUrl
         );
-
+        
         if (existingHook) {
             // Delete the webhook
             await axios.delete(`${GITHUB_API}/repos/${owner}/${repo}/hooks/${existingHook.id}`, {
@@ -623,7 +623,7 @@ app.delete('/api/repos/:owner/:repo/webhook', isAuthenticated, async (req, res) 
                     'Accept': 'application/vnd.github.v3+json'
                 }
             });
-
+            
             // Remove from connected repositories
             if (connectedRepos.has(userId)) {
                 // Find the repo ID
@@ -633,14 +633,14 @@ app.delete('/api/repos/:owner/:repo/webhook', isAuthenticated, async (req, res) 
                         'Accept': 'application/vnd.github.v3+json'
                     }
                 });
-
+                
                 const repoId = repoResponse.data.id;
                 connectedRepos.set(
-                    userId,
+                    userId, 
                     connectedRepos.get(userId).filter(id => id !== repoId)
                 );
             }
-
+            
             res.json({
                 success: true,
                 message: 'Repository disconnected successfully'
@@ -674,7 +674,7 @@ app.post('/api/repos/:owner/:repo/commit', isAuthenticated, async (req, res) => 
                 'Accept': 'application/vnd.github.v3+json'
             }
         });
-
+        
         // Get the current file (if it exists)
         let existingSha;
         try {
