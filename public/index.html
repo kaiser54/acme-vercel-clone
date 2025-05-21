@@ -1,0 +1,1718 @@
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Repository Explorer</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #0366d6;
+            --secondary-color: #24292e;
+            --bg-color: #f6f8fa;
+            --text-color: #24292e;
+            --border-color: #e1e4e8;
+            --hover-color: #f1f8ff;
+            --private-color: #f9826c;
+            --notification-color: #2ea44f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background-color: var(--secondary-color);
+            color: white;
+            padding: 20px 0;
+            margin-bottom: 30px;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-title i {
+            font-size: 24px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .user-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .loader {
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+            color: var(--primary-color);
+        }
+
+        .error {
+            text-align: center;
+            padding: 20px;
+            background-color: #ffebe9;
+            border: 1px solid #ffc1c0;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            color: #cf222e;
+        }
+
+        .login-container {
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 40px;
+            margin: 50px auto;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        .login-container h2 {
+            margin-bottom: 20px;
+        }
+
+        .login-container p {
+            margin-bottom: 30px;
+            color: #586069;
+        }
+
+        .github-login-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background-color: var(--secondary-color);
+            color: white;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .github-login-btn:hover {
+            background-color: #1a1f24;
+        }
+
+        .repo-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .repo-card {
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 20px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .repo-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            background-color: var(--hover-color);
+        }
+
+        .repo-card.updated {
+            animation: highlight 2s ease-out;
+        }
+
+        @keyframes highlight {
+            0% { background-color: rgba(46, 164, 79, 0.1); }
+            50% { background-color: rgba(46, 164, 79, 0.3); }
+            100% { background-color: white; }
+        }
+
+        .repo-name {
+            color: var(--primary-color);
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .repo-description {
+            color: #586069;
+            font-size: 14px;
+            margin-bottom: 15px;
+            min-height: 45px;
+        }
+
+        .repo-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #586069;
+        }
+
+        .repo-language {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .repo-language-color {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .repo-private-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: var(--private-color);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .repo-detail {
+            display: none;
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .repo-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        .repo-detail-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .repo-detail-title h2 {
+            color: var(--primary-color);
+        }
+
+        .repo-detail-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            gap: 5px;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #0255b8;
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: #e1e4e8;
+        }
+
+        .repo-info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .repo-info-item {
+            padding: 15px;
+            background-color: var(--bg-color);
+            border-radius: 6px;
+        }
+
+        .repo-info-item h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #586069;
+        }
+
+        .repo-info-item p {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .commits-section {
+            margin-bottom: 30px;
+        }
+
+        .commits-section h3 {
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .commit-list {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .commit-item {
+            display: flex;
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+            background-color: white;
+        }
+
+        .commit-item:last-child {
+            border-bottom: none;
+        }
+
+        .commit-item:hover {
+            background-color: var(--hover-color);
+        }
+
+        .commit-item.new {
+            animation: highlight-commit 2s ease-out;
+        }
+
+        @keyframes highlight-commit {
+            0% { background-color: rgba(46, 164, 79, 0.1); }
+            50% { background-color: rgba(46, 164, 79, 0.3); }
+            100% { background-color: white; }
+        }
+
+        .commit-message {
+            flex: 1;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .commit-meta {
+            font-size: 12px;
+            color: #586069;
+        }
+
+        .branch-section {
+            margin-bottom: 30px;
+        }
+
+        .branch-section h3 {
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .branch-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .branch-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background-color: var(--bg-color);
+            border-radius: 12px;
+            font-size: 14px;
+        }
+
+        .branch-item.default {
+            background-color: #dafbe1;
+            color: #1a7f37;
+        }
+
+        .branch-item.new {
+            animation: highlight-branch 2s ease-out;
+        }
+
+        @keyframes highlight-branch {
+            0% { background-color: rgba(46, 164, 79, 0.1); }
+            50% { background-color: rgba(46, 164, 79, 0.3); }
+            100% { background-color: var(--bg-color); }
+        }
+
+        .new-commit-section {
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 20px;
+        }
+
+        .new-commit-section h3 {
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        textarea.form-control {
+            min-height: 100px;
+        }
+
+        .back-btn {
+            margin-bottom: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: var(--primary-color);
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .notification-badge {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: var(--notification-color);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            transition: all 0.3s ease;
+            transform: translateY(-100px);
+        }
+
+        .notification-badge.show {
+            transform: translateY(0);
+        }
+
+        .webhook-section {
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .webhook-section h3 {
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .realtime-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #cf222e;
+        }
+
+        .status-indicator.connected {
+            background-color: #2ea44f;
+        }
+
+        /* Repository connection modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background-color: white;
+            border-radius: 6px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #586069;
+        }
+
+        .modal-content {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Repository list inside modal */
+        .repo-select-list {
+            margin-bottom: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+
+        .repo-select-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .repo-select-item:last-child {
+            border-bottom: none;
+        }
+
+        .repo-select-checkbox {
+            margin-right: 15px;
+        }
+
+        .repo-select-info {
+            flex: 1;
+        }
+
+        .repo-select-name {
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+
+        .repo-select-description {
+            color: #586069;
+            font-size: 14px;
+        }
+
+        .repo-select-meta {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #586069;
+        }
+
+        .repo-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .repo-status.connected {
+            background-color: #dafbe1;
+            color: #1a7f37;
+        }
+
+        .repo-status.connecting {
+            background-color: #fff8c5;
+            color: #9a6700;
+        }
+
+        .repo-status.disconnected {
+            background-color: #f6f8fa;
+            color: #586069;
+        }
+
+        .repo-status.error {
+            background-color: #ffebe9;
+            color: #cf222e;
+        }
+
+        .repo-filter {
+            display: flex;
+            margin-bottom: 20px;
+            gap: 10px;
+        }
+
+        .repo-search {
+            flex: 1;
+        }
+
+        .connection-status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            background-color: var(--bg-color);
+        }
+
+        .connection-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .connection-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .connection-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-left-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Connected repositories badge */
+        .connected-repos-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .connect-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+            z-index: 100;
+        }
+
+        .connect-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Real-time status indicator in header */
+        .realtime-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+            color: white;
+            margin-left: 15px;
+        }
+
+        .indicator-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #cf222e;
+        }
+
+        .indicator-dot.active {
+            background-color: #2ea44f;
+        }
+
+        .language-js { background-color: #f1e05a; }
+        .language-html { background-color: #e34c26; }
+        .language-css { background-color: #563d7c; }
+        .language-python { background-color: #3572A5; }
+        .language-java { background-color: #b07219; }
+        .language-c { background-color: #555555; }
+        .language-cpp { background-color: #f34b7d; }
+        .language-go { background-color: #00ADD8; }
+        .language-ruby { background-color: #701516; }
+        .language-php { background-color: #4F5D95; }
+        .language-typescript { background-color: #2b7489; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <div class="header-title">
+                <i class="fab fa-github"></i>
+                <h1>GitHub Repository Explorer</h1>
+                
+                <!-- Real-time status indicator -->
+                <div class="realtime-indicator">
+                    <div id="realtime-indicator-dot" class="indicator-dot"></div>
+                    <span id="realtime-indicator-text">Disconnected</span>
+                </div>
+            </div>
+            <div class="user-actions">
+                <div id="user-info" class="user-info" style="display: none;">
+                    <img id="user-avatar" class="user-avatar" src="/api/placeholder/40/40" alt="User avatar">
+                    <span id="username">Loading...</span>
+                    <a href="/auth/logout" class="btn btn-secondary">Logout</a>
+                </div>
+                <div id="login-btn-container" style="display: none;">
+                    <a href="/auth/github" class="btn btn-primary">
+                        <i class="fab fa-github"></i> Login with GitHub
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div id="error-container" class="error" style="display: none;"></div>
+        <div id="notification-badge" class="notification-badge"></div>
+
+        <div id="login-required" class="login-container" style="display: none;">
+            <h2>Connect with GitHub</h2>
+            <p>Sign in with your GitHub account to access your repositories and explore your projects.</p>
+            <a href="/auth/github" class="github-login-btn">
+                <i class="fab fa-github"></i> Connect with GitHub
+            </a>
+        </div>
+
+        <div id="repo-detail" class="repo-detail"></div>
+
+        <div id="repo-container" style="display: none;">
+            <div id="loader" class="loader">Loading repositories...</div>
+            <div id="repo-list" class="repo-list"></div>
+        </div>
+    </div>
+
+    <!-- Connect repositories button -->
+    <div id="connect-btn" class="connect-btn" onclick="openConnectionModal()" style="display: none;">
+        <i class="fas fa-plug"></i>
+    </div>
+
+    <!-- Repository connection modal -->
+    <div id="connection-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Connect Repositories</h2>
+                <button class="modal-close" onclick="closeConnectionModal()">&times;</button>
+            </div>
+            <div class="modal-content">
+                <div class="repo-filter">
+                    <div class="repo-search">
+                        <input type="text" id="repo-search-input" class="form-control" placeholder="Search repositories..." oninput="filterRepositories()">
+                    </div>
+                    <div>
+                        <select id="repo-filter-select" class="form-control" onchange="filterRepositories()">
+                            <option value="all">All repositories</option>
+                            <option value="connected">Connected</option>
+                            <option value="disconnected">Not connected</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="repo-select-list" class="repo-select-list">
+                    <div class="loader">Loading repositories...</div>
+                </div>
+                
+                <div id="connection-status" class="connection-status" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeConnectionModal()">Cancel</button>
+                <button id="connect-button" class="btn btn-primary" onclick="connectSelectedRepositories()">
+                    <i class="fas fa-plug"></i> Connect
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let userData = null;
+        let repositories = [];
+        let currentRepo = null;
+        let socket = null;
+        let allRepositories = [];
+        let connectedRepositoryIds = [];
+        let filteredRepositories = [];
+        let selectedRepositories = [];
+
+        // DOM elements
+        const loginRequired = document.getElementById('login-required');
+        const repoContainer = document.getElementById('repo-container');
+        const loader = document.getElementById('loader');
+        const repoList = document.getElementById('repo-list');
+        const repoDetail = document.getElementById('repo-detail');
+        const errorContainer = document.getElementById('error-container');
+        const userInfo = document.getElementById('user-info');
+        const loginBtnContainer = document.getElementById('login-btn-container');
+        const userAvatar = document.getElementById('user-avatar');
+        const usernameElement = document.getElementById('username');
+        const notificationBadge = document.getElementById('notification-badge');
+        
+        // DOM elements for repo connection
+        const connectionModal = document.getElementById('connection-modal');
+        const repoSelectList = document.getElementById('repo-select-list');
+        const connectButton = document.getElementById('connect-button');
+        const connectionStatus = document.getElementById('connection-status');
+        const repoSearchInput = document.getElementById('repo-search-input');
+        const repoFilterSelect = document.getElementById('repo-filter-select');
+        const connectBtn = document.getElementById('connect-btn');
+        const realtimeIndicatorDot = document.getElementById('realtime-indicator-dot');
+        const realtimeIndicatorText = document.getElementById('realtime-indicator-text');
+
+        // Fetch user data and repositories on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            checkAuthStatus();
+        });
+
+        // Check authentication status
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch('/api/user');
+                
+                if (response.status === 401) {
+                    // User is not authenticated
+                    showLoginScreen();
+                    return;
+                }
+                
+                if (!response.ok) throw new Error('Failed to fetch user data');
+                
+                // User is authenticated
+                userData = await response.json();
+                userInfo.style.display = 'flex';
+                loginBtnContainer.style.display = 'none';
+                usernameElement.textContent = userData.login;
+                userAvatar.src = userData.avatar_url || '/api/placeholder/40/40';
+                
+                // Initialize the application
+                initializeApp();
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+                showLoginScreen();
+            }
+        }
+
+        // Initialize the application
+        function initializeApp() {
+            // Initialize WebSocket connection
+            initializeSocket();
+            
+            // Show connect button
+            connectBtn.style.display = 'flex';
+            
+            // Update realtime connection status
+            updateRealtimeStatus();
+            
+            // Fetch connected repositories
+            fetchConnectedRepositories();
+            
+            // Fetch repositories
+            fetchRepositories();
+        }
+
+        // Initialize Socket.io connection
+        function initializeSocket() {
+            if (!userData) return;
+            
+            // Connect to the Socket.io server
+            socket = io();
+            
+            // Register the user with the socket
+            socket.on('connect', () => {
+                console.log('Connected to WebSocket server');
+                socket.emit('register', userData.id);
+                showNotification('Real-time connection established', 'success');
+                updateRealtimeStatus();
+            });
+            
+            // Handle disconnection
+            socket.on('disconnect', () => {
+                console.log('Disconnected from WebSocket server');
+                showNotification('Real-time connection lost', 'error');
+                updateRealtimeStatus();
+            });
+            
+            // Listen for repository updates
+            socket.on('repo-update', handleRepoUpdate);
+        }
+
+        // Update realtime connection status
+        function updateRealtimeStatus() {
+            if (socket && socket.connected) {
+                realtimeIndicatorDot.classList.add('active');
+                realtimeIndicatorText.textContent = 'Real-time active';
+            } else {
+                realtimeIndicatorDot.classList.remove('active');
+                realtimeIndicatorText.textContent = 'Disconnected';
+            }
+        }
+
+        // Fetch connected repositories
+        async function fetchConnectedRepositories() {
+            try {
+                const response = await fetch('/api/connected-repos');
+                
+                if (response.status === 401) {
+                    showLoginScreen();
+                    return;
+                }
+                
+                if (!response.ok) throw new Error('Failed to fetch connected repositories');
+                
+                const data = await response.json();
+                connectedRepositoryIds = data.connected || [];
+                
+                console.log('Connected repositories:', connectedRepositoryIds);
+            } catch (error) {
+                console.error('Error fetching connected repositories:', error);
+                showError('Failed to load connected repositories');
+            }
+        }
+
+        // Handle repository updates from WebSocket
+        function handleRepoUpdate(data) {
+            console.log('Received repo update:', data);
+            
+            switch (data.type) {
+                case 'push':
+                    // Update repository in the list
+                    updateRepositoryInList(data.repo);
+                    
+                    // If we're currently viewing this repo, update the commits
+                    if (currentRepo && currentRepo.id === data.repo.id) {
+                        // Refresh the repo details to see new commits
+                        const owner = data.repo.fullName.split('/')[0];
+                        fetchRepoDetails(owner, data.repo.name);
+                        
+                        // Show notification
+                        showNotification(`New commits pushed to ${data.repo.name} by ${data.pusher}`, 'success');
+                    } else {
+                        // Just show notification
+                        showNotification(`New commits pushed to ${data.repo.name}`, 'success');
+                    }
+                    break;
+                
+                case 'branch-created':
+                    // If we're currently viewing this repo, update the branches
+                    if (currentRepo && currentRepo.id === data.repo.id) {
+                        // Refresh the repo details to see new branch
+                        const owner = data.repo.fullName.split('/')[0];
+                        fetchRepoDetails(owner, data.repo.name);
+                        
+                        // Show notification
+                        showNotification(`New branch ${data.branch} created in ${data.repo.name}`, 'success');
+                    } else {
+                        // Just show notification
+                        showNotification(`New branch created in ${data.repo.name}`, 'success');
+                    }
+                    break;
+                
+                case 'branch-deleted':
+                    // If we're currently viewing this repo, update the branches
+                    if (currentRepo && currentRepo.id === data.repo.id) {
+                        // Refresh the repo details to update branch list
+                        const owner = data.repo.fullName.split('/')[0];
+                        fetchRepoDetails(owner, data.repo.name);
+                        
+                        // Show notification
+                        showNotification(`Branch ${data.branch} deleted from ${data.repo.name}`, 'success');
+                    } else {
+                        // Just show notification
+                        showNotification(`Branch deleted from ${data.repo.name}`, 'success');
+                    }
+                    break;
+                
+                case 'repository':
+                    if (data.action === 'created') {
+                        // Add the new repository to our list
+                        repositories.unshift(data.repo);
+                        renderRepositories(repositories);
+                        showNotification(`New repository created: ${data.repo.name}`, 'success');
+                    } else if (data.action === 'deleted') {
+                        // Remove the repository from our list
+                        repositories = repositories.filter(repo => repo.id !== data.repo.id);
+                        renderRepositories(repositories);
+                        
+                        // If we're viewing this repo, go back to list
+                        if (currentRepo && currentRepo.id === data.repo.id) {
+                            closeRepoDetails();
+                        }
+                        
+                        showNotification(`Repository deleted: ${data.repo.name}`, 'success');
+                    } else {
+                        // Repository updated (made public/private or other changes)
+                        updateRepositoryInList(data.repo);
+                        
+                        // If we're viewing this repo, refresh the details
+                        if (currentRepo && currentRepo.id === data.repo.id) {
+                            const owner = data.repo.fullName.split('/')[0];
+                            fetchRepoDetails(owner, data.repo.name);
+                        }
+                        
+                        showNotification(`Repository ${data.repo.name} updated`, 'success');
+                    }
+                    break;
+            }
+        }
+
+        // Update a repository in the list
+        function updateRepositoryInList(updatedRepo) {
+            // Find the repo in our list and update it
+            const index = repositories.findIndex(repo => repo.id === updatedRepo.id);
+            
+            if (index !== -1) {
+                // Update the repository data
+                repositories[index] = { ...repositories[index], ...updatedRepo };
+                
+                // Move it to the top of the list (as it's been updated)
+                const repo = repositories.splice(index, 1)[0];
+                repositories.unshift(repo);
+                
+                // Re-render the list
+                renderRepositories(repositories);
+                
+                // Highlight the updated repo
+                const repoCard = document.querySelector(`.repo-card[data-repo="${updatedRepo.name}"]`);
+                if (repoCard) {
+                    repoCard.classList.add('updated');
+                    setTimeout(() => {
+                        repoCard.classList.remove('updated');
+                    }, 2000);
+                }
+            } else {
+                // This is a new repo we didn't have before
+                repositories.unshift(updatedRepo);
+                renderRepositories(repositories);
+            }
+        }
+
+        // Show login screen
+        function showLoginScreen() {
+            loginRequired.style.display = 'block';
+            repoContainer.style.display = 'none';
+            userInfo.style.display = 'none';
+            loginBtnContainer.style.display = 'block';
+        }
+
+        // Fetch repositories
+        async function fetchRepositories() {
+            try {
+                loader.style.display = 'block';
+                repoList.innerHTML = '';
+                repoContainer.style.display = 'block';
+                loginRequired.style.display = 'none';
+                
+                const response = await fetch('/api/repos');
+                
+                if (response.status === 401) {
+                    // User is not authenticated
+                    showLoginScreen();
+                    return;
+                }
+                
+                if (!response.ok) throw new Error('Failed to fetch repositories');
+                
+                repositories = await response.json();
+                allRepositories = repositories; // Store in global variable for connection modal
+                
+                if (repositories.length === 0) {
+                    repoList.innerHTML = '<p style="grid-column: 1/-1; text-align: center; padding: 50px;">No repositories found.</p>';
+                } else {
+                    renderRepositories(repositories);
+                }
+            } catch (error) {
+                if (error.message.includes('Unauthorized')) {
+                    showLoginScreen();
+                } else {
+                    showError(error.message);
+                    console.error('Error:', error);
+                }
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+
+        // Render repository list
+        function renderRepositories(repos) {
+            repoList.innerHTML = '';
+            
+            repos.forEach(repo => {
+                const repoCard = document.createElement('div');
+                repoCard.className = 'repo-card';
+                repoCard.dataset.repo = repo.name;
+                repoCard.dataset.id = repo.id;
+                
+                // Get username from repo fullName or from userData
+                const username = repo.fullName ? repo.fullName.split('/')[0] : (userData ? userData.login : 'unknown');
+                
+                repoCard.innerHTML = `
+                    ${repo.isPrivate ? '<span class="repo-private-badge">Private</span>' : ''}
+                    <div class="repo-name">${repo.name}</div>
+                    <div class="repo-description">${repo.description || 'No description'}</div>
+                    <div class="repo-meta">
+                        ${repo.language ? `
+                            <div class="repo-language">
+                                <span class="repo-language-color language-${repo.language.toLowerCase()}"></span>
+                                <span>${repo.language}</span>
+                            </div>
+                        ` : '<div></div>'}
+                        <div>Updated ${formatDate(repo.updatedAt)}</div>
+                    </div>
+                `;
+                
+                repoCard.addEventListener('click', () => {
+                    fetchRepoDetails(username, repo.name);
+                });
+                
+                repoList.appendChild(repoCard);
+            });
+        }
+
+        // Fetch repository details
+        async function fetchRepoDetails(owner, repoName) {
+            try {
+                loader.style.display = 'block';
+                repoDetail.style.display = 'none';
+                
+                const response = await fetch(`/api/repos/${owner}/${repoName}`);
+                
+                if (response.status === 401) {
+                    // User is not authenticated
+                    showLoginScreen();
+                    return;
+                }
+                
+                if (!response.ok) throw new Error('Failed to fetch repository details');
+                
+                currentRepo = await response.json();
+                renderRepoDetails(currentRepo);
+                
+                // Scroll to top
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (error) {
+                if (error.message.includes('Unauthorized')) {
+                    showLoginScreen();
+                } else {
+                    showError(error.message);
+                    console.error('Error:', error);
+                }
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+
+        // Render repository details
+        function renderRepoDetails(repo) {
+            repoDetail.innerHTML = `
+                <div class="back-btn" onclick="closeRepoDetails()">
+                    <i class="fas fa-arrow-left"></i> Back to repositories
+                </div>
+                
+                <div class="webhook-section">
+                    <h3>Real-time Updates</h3>
+                    <div class="realtime-status">
+                        <div class="status-indicator ${socket && socket.connected ? 'connected' : ''}"></div>
+                        <span>${socket && socket.connected ? 'Connected - You will receive real-time updates' : 'Disconnected - Refresh the page to reconnect'}</span>
+                    </div>
+                    <p>You will automatically see updates when you push to this repository or when branches are created/deleted.</p>
+                </div>
+                
+                <div class="repo-detail-header">
+                    <div class="repo-detail-title">
+                        <i class="fas fa-book"></i>
+                        <h2>${repo.name}</h2>
+                        ${repo.isPrivate ? '<span class="repo-private-badge">Private</span>' : ''}
+                    </div>
+                    <div class="repo-detail-actions">
+                        <a href="${repo.url}" target="_blank" class="btn btn-primary">
+                            <i class="fas fa-external-link-alt"></i> View on GitHub
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="repo-info-grid">
+                    <div class="repo-info-item">
+                        <h3>Primary Language</h3>
+                        <p>${repo.language || 'Not specified'}</p>
+                    </div>
+                    <div class="repo-info-item">
+                        <h3>Framework</h3>
+                        <p>${repo.framework || 'Not detected'}</p>
+                    </div>
+                    <div class="repo-info-item">
+                        <h3>Preset/Template</h3>
+                        <p>${repo.preset || 'Not detected'}</p>
+                    </div>
+                    <div class="repo-info-item">
+                        <h3>Last Updated</h3>
+                        <p>${formatDate(repo.updatedAt, true)}</p>
+                    </div>
+                </div>
+                
+                <div class="branch-section">
+                    <h3>Branches</h3>
+                    <div class="branch-list">
+                        ${repo.branches && repo.branches.length > 0 ? 
+                            repo.branches.map(branch => `
+                                <div class="branch-item ${branch.isDefault ? 'default' : ''}">
+                                    <i class="fas fa-code-branch"></i>
+                                    <span>${branch.name}</span>
+                                    ${branch.isDefault ? '<span>(default)</span>' : ''}
+                                </div>
+                            `).join('') 
+                            : '<div>No branches found</div>'
+                        }
+                    </div>
+                </div>
+                
+                <div class="commits-section">
+                    <h3>Recent Commits</h3>
+                    <div class="commit-list">
+                        ${repo.lastCommits && repo.lastCommits.length > 0 ? 
+                            repo.lastCommits.map(commit => `
+                                <div class="commit-item" data-sha="${commit.sha}">
+                                    <div>
+                                        <div class="commit-message">${commit.message}</div>
+                                        <div class="commit-meta">
+                                            <span>${commit.author}</span> committed on <span>${formatDate(commit.date, true)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('') 
+                            : '<div class="commit-item">No commits found</div>'
+                        }
+                    </div>
+                </div>
+                
+                <div class="new-commit-section">
+                    <h3>Create New Commit</h3>
+                    <form id="commit-form" onsubmit="createCommit(event)">
+                        <div class="form-group">
+                            <label for="file-path">File Path</label>
+                            <input type="text" id="file-path" class="form-control" placeholder="e.g., README.md" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="commit-message">Commit Message</label>
+                            <input type="text" id="commit-message" class="form-control" placeholder="Update README.md" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="file-content">File Content</label>
+                            <textarea id="file-content" class="form-control" placeholder="# My Project" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Create Commit
+                        </button>
+                    </form>
+                </div>
+            `;
+            
+            repoDetail.style.display = 'block';
+        }
+
+        // Close repository details
+        function closeRepoDetails() {
+            repoDetail.style.display = 'none';
+            currentRepo = null;
+        }
+
+        // Create a new commit
+        async function createCommit(event) {
+            event.preventDefault();
+            
+            if (!currentRepo) return;
+            
+            const filePath = document.getElementById('file-path').value;
+            const message = document.getElementById('commit-message').value;
+            const content = document.getElementById('file-content').value;
+            
+            // Extract owner from full name
+            const owner = currentRepo.fullName.split('/')[0];
+            const repoName = currentRepo.name;
+            
+            try {
+                const response = await fetch(`/api/repos/${owner}/${repoName}/commit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        filePath,
+                        content,
+                        message,
+                        branch: currentRepo.defaultBranch
+                    })
+                });
+                
+                if (response.status === 401) {
+                    // Authentication expired
+                    showLoginScreen();
+                    showError('Your session has expired. Please login again.');
+                    return;
+                }
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to create commit');
+                }
+                
+                const data = await response.json();
+                
+                // Clear the form
+                document.getElementById('file-path').value = '';
+                document.getElementById('commit-message').value = '';
+                document.getElementById('file-content').value = '';
+                
+                // Show success message
+                showError(`Commit created successfully!`, 'success');
+                
+                // The webhook will handle the real-time update, but just in case,
+                // let's refresh the repo details after a short delay
+                setTimeout(() => {
+                    fetchRepoDetails(owner, repoName);
+                }, 1500);
+            } catch (error) {
+                showError(error.message);
+                console.error('Error creating commit:', error);
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type = 'info') {
+            notificationBadge.textContent = message;
+            
+            if (type === 'success') {
+                notificationBadge.style.backgroundColor = '#2ea44f';
+            } else if (type === 'error') {
+                notificationBadge.style.backgroundColor = '#cf222e';
+            } else {
+                notificationBadge.style.backgroundColor = '#0366d6';
+            }
+            
+            notificationBadge.classList.add('show');
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+                notificationBadge.classList.remove('show');
+            }, 5000);
+        }
+
+        // Show error or success message
+        function showError(message, type = 'error') {
+            errorContainer.textContent = message;
+            errorContainer.style.display = 'block';
+            
+            if (type === 'success') {
+                errorContainer.style.backgroundColor = '#dafbe1';
+                errorContainer.style.borderColor = '#aceebb';
+                errorContainer.style.color = '#1a7f37';
+            } else {
+                errorContainer.style.backgroundColor = '#ffebe9';
+                errorContainer.style.borderColor = '#ffc1c0';
+                errorContainer.style.color = '#cf222e';
+            }
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+                errorContainer.style.display = 'none';
+            }, 5000);
+        }
+
+        // Helper function to format dates
+        function formatDate(dateString, detailed = false) {
+            if (!dateString) return 'N/A';
+            
+            const date = new Date(dateString);
+            
+            if (detailed) {
+                return date.toLocaleString();
+            }
+            
+            const now = new Date();
+            const diffInSeconds = Math.floor((now - date) / 1000);
+            
+            if (diffInSeconds < 60) {
+                return 'just now';
+            } else if (diffInSeconds < 3600) {
+                const minutes = Math.floor(diffInSeconds / 60);
+                return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+            } else if (diffInSeconds < 86400) {
+                const hours = Math.floor(diffInSeconds / 3600);
+                return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+            } else if (diffInSeconds < 2592000) {
+                const days = Math.floor(diffInSeconds / 86400);
+                return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+            } else {
+                return `on ${date.toLocaleDateString()}`;
+            }
+        }
+
+        // Open connection modal
+        function openConnectionModal() {
+            connectionModal.classList.add('show');
+            loadRepositoriesForConnection();
+        }
+        
+        // Close connection modal
+        function closeConnectionModal() {
+            connectionModal.classList.remove('show');
+            // Reset selection
+            selectedRepositories = [];
+            connectionStatus.style.display = 'none';
+        }
+        
+        // Load repositories for connection modal
+        async function loadRepositoriesForConnection() {
+            try {
+                repoSelectList.innerHTML = '<div class="loader">Loading repositories...</div>';
+                
+                if (allRepositories.length === 0) {
+                    // Fetch repositories if not already loaded
+                    const response = await fetch('/api/repos');
+                    
+                    if (response.status === 401) {
+                        showLoginScreen();
+                        return;
+                    }
+                    
+                    if (!response.ok) throw new Error('Failed to fetch repositories');
+                    
+                    allRepositories = await response.json();
+                }
+                
+                // Get latest connected repos
+                await fetchConnectedRepositories();
+                
+                // Filter and render
+                filterRepositories();
+            } catch (error) {
+                repoSelectList.innerHTML = `<div class="error">Error loading repositories: ${error.message}</div>`;
+                console.error('Error loading repositories:', error);
+            }
+        }
+        
+        // Filter repositories based on search and filter criteria
+        function filterRepositories() {
+            const searchTerm = repoSearchInput.value.toLowerCase();
+            const filterType = repoFilterSelect.value;
+            
+            filteredRepositories = allRepositories.filter(repo => {
+                const nameMatch = repo.name.toLowerCase().includes(searchTerm);
+                const descMatch = repo.description && repo.description.toLowerCase().includes(searchTerm);
+                const textMatch = nameMatch || descMatch;
+                
+                // Filter by connection status
+                const isConnected = connectedRepositoryIds.includes(repo.id);
+                
+                if (filterType === 'connected' && !isConnected) return false;
+                if (filterType === 'disconnected' && isConnected) return false;
+                
+                return textMatch;
+            });
+            
+            renderRepositorySelectionList(filteredRepositories);
+        }
+        
+        // Render repository selection list
+        function renderRepositorySelectionList(repos) {
+            if (repos.length === 0) {
+                repoSelectList.innerHTML = '<div style="padding: 20px; text-align: center;">No repositories found matching your criteria.</div>';
+                return;
+            }
+            
+            repoSelectList.innerHTML = '';
+            
+            repos.forEach(repo => {
+                const isConnected = connectedRepositoryIds.includes(repo.id);
+                const isSelected = selectedRepositories.some(r => r.id === repo.id);
+                
+                const repoItem = document.createElement('div');
+                repoItem.className = 'repo-select-item';
+                
+                const username = repo.fullName ? repo.fullName.split('/')[0] : (userData ? userData.login : 'unknown');
+                
+                repoItem.innerHTML = `
+                    <input type="checkbox" class="repo-select-checkbox" data-id="${repo.id}" 
+                           ${isConnected ? 'checked disabled' : ''} ${isSelected ? 'checked' : ''}>
+                    <div class="repo-select-info">
+                        <div class="repo-select-name">${repo.name}</div>
+                        <div class="repo-select-description">${repo.description || 'No description'}</div>
+                        <div class="repo-select-meta">
+                            ${repo.language ? `
+                                <div class="repo-language">
+                                    <span class="repo-language-color language-${repo.language.toLowerCase()}"></span>
+                                    <span>${repo.language}</span>
+                                </div>
+                            ` : ''}
+                            <div>Updated ${formatDate(repo.updatedAt)}</div>
+                            <div class="repo-status ${isConnected ? 'connected' : 'disconnected'}">
+                                ${isConnected ? 'Connected' : 'Not connected'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Add event listener for selection
+                const checkbox = repoItem.querySelector('.repo-select-checkbox');
+                if (!isConnected) {
+                    checkbox.addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            selectedRepositories.push({
+                                id: repo.id,
+                                name: repo.name,
+                                owner: username
+                            });
+                        } else {
+                            selectedRepositories = selectedRepositories.filter(r => r.id !== repo.id);
+                        }
+                        updateConnectButton();
+                    });
+                }
+                
+                repoSelectList.appendChild(repoItem);
+            });
+            
+            updateConnectButton();
+        }
+        
+        // Update the connect button state
+        function updateConnectButton() {
+            connectButton.disabled = selectedRepositories.length === 0;
+            
+            if (selectedRepositories.length === 0) {
+                connectButton.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            } else {
+                connectButton.innerHTML = `<i class="fas fa-plug"></i> Connect (${selectedRepositories.length})`;
+            }
+        }
+        
+        // Connect selected repositories
+        async function connectSelectedRepositories() {
+            if (selectedRepositories.length === 0) return;
+            
+            try {
+                // Disable the connect button
+                connectButton.disabled = true;
+                connectButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+                
+                // Clear and show connection status
+                connectionStatus.innerHTML = '';
+                connectionStatus.style.display = 'block';
+                
+                // Create status items for each selected repository
+                selectedRepositories.forEach(repo => {
+                    const statusItem = document.createElement('div');
+                    statusItem.className = 'connection-item';
+                    statusItem.id = `connection-status-${repo.id}`;
+                    statusItem.innerHTML = `
+                        <div class="connection-spinner"></div>
+                        <div>
+                            <div><strong>${repo.name}</strong></div>
+                            <div>Connecting webhook...</div>
+                        </div>
+                    `;
+                    connectionStatus.appendChild(statusItem);
+                });
+                
+                // Send the request to connect repositories
+                const response = await fetch('/api/connect-repos', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        repositories: selectedRepositories
+                    })
+                });
+                
+                if (response.status === 401) {
+                    showLoginScreen();
+                    return;
+                }
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to connect repositories');
+                }
+                
+                const data = await response.json();
+                
+                // Update connection status for each repository
+                data.results.forEach(result => {
+                    const statusItem = document.getElementById(`connection-status-${result.id}`);
+                    
+                    if (statusItem) {
+                        let statusClass = '';
+                        let iconClass = '';
+                        
+                        switch (result.status) {
+                            case 'connected':
+                                statusClass = 'connected';
+                                iconClass = 'fa-check-circle';
+                                connectedRepositoryIds.push(result.id);
+                                break;
+                            case 'already_connected':
+                                statusClass = 'connected';
+                                iconClass = 'fa-check-circle';
+                                break;
+                            case 'error':
+                                statusClass = 'error';
+                                iconClass = 'fa-times-circle';
+                                break;
+                            default:
+                                statusClass = '';
+                                iconClass = 'fa-info-circle';
+                        }
+                        
+                        statusItem.innerHTML = `
+                            <div><i class="fas ${iconClass}"></i></div>
+                            <div>
+                                <div><strong>${result.name}</strong></div>
+                                <div class="repo-status ${statusClass}">${result.message}</div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                // Reset and update UI
+                selectedRepositories = [];
+                updateConnectButton();
+                
+                // Show success notification
+                showNotification('Repositories connected successfully', 'success');
+                
+                // Update the repository list to reflect new connected status
+                setTimeout(() => {
+                    filterRepositories();
+                }, 1000);
+                
+            } catch (error) {
+                showError(error.message);
+                console.error('Error connecting repositories:', error);
+                
+                // Update UI to show error
+                connectButton.disabled = false;
+                connectButton.innerHTML = '<i class="fas fa-plug"></i> Connect';
+            }
+        }
+
+        // Expose functions to global scope
+        window.openConnectionModal = openConnectionModal;
+        window.closeConnectionModal = closeConnectionModal;
+        window.filterRepositories = filterRepositories;
+        window.connectSelectedRepositories = connectSelectedRepositories;
+        window.closeRepoDetails = closeRepoDetails;
+        window.createCommit = createCommit;
+    </script>
+</body>
+</html>
